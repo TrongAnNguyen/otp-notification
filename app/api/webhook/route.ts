@@ -7,10 +7,13 @@ async function sendTelegramMessage(text: string) {
   const chatId = process.env.TELEGRAM_CHAT_ID;
 
   if (!token || !chatId) {
+    console.error("Telegram configuration missing: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is not set.");
     throw new Error("Missing Telegram configuration");
   }
 
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
+  console.log(`Sending message to Telegram chat ${chatId}...`);
+  
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -23,8 +26,11 @@ async function sendTelegramMessage(text: string) {
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.error(`Telegram API error: status ${response.status}, body: ${errorText}`);
     throw new Error(`Telegram API error: ${errorText}`);
   }
+  
+  console.log("Message successfully sent to Telegram.");
 }
 
 function isOtpMessage(message: string): boolean {
@@ -54,25 +60,30 @@ function formatNotification(sender: string, message: string, receivedAt: string)
 export async function POST(request: Request) {
   try {
     const data = await request.json();
+    console.log(`Received webhook request: event=${data.event}, deviceId=${data.deviceId}`);
 
     // 1. Validate Device ID
     if (data.deviceId !== process.env.ALLOWED_DEVICE_ID) {
-      console.warn(`Unauthorized device: ${data.deviceId}`);
+      console.warn(`Unauthorized device: ${data.deviceId}. Expected: ${process.env.ALLOWED_DEVICE_ID}`);
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // 2. Filter for SMS events with payload
     if (data.event !== "sms:received" || !data.payload) {
+      console.log(`Ignoring event: ${data.event}`);
       return NextResponse.json({ success: true, message: "Ignored event" });
     }
 
     const { sender, message, receivedAt } = data.payload;
+    console.log(`Processing SMS from ${sender}...`);
 
     // 3. Filter for OTP messages only
     if (!isOtpMessage(message)) {
-      console.log("Non-OTP message filtered out.");
+      console.log(`Non-OTP message filtered out from sender: ${sender}`);
       return NextResponse.json({ success: true, message: "Not an OTP message" });
     }
+
+    console.log(`Found potential OTP message from ${sender}. Formatting notification...`);
 
     // 4. Send Notification
     const notification = formatNotification(sender, message, receivedAt);
