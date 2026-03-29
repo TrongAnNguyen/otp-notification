@@ -31,6 +31,11 @@ function isOtpMessage(message: string): boolean {
   return OTP_REGEX.test(message);
 }
 
+function escapeMarkdown(text: string): string {
+  // Escapes characters that have special meaning in Telegram's legacy Markdown
+  return text.replace(/([_*`\[])/g, "\\$1");
+}
+
 function formatNotification(sender: string, message: string, receivedAt: string) {
   const date = new Date(receivedAt).toLocaleString("en-US", {
     timeZone: "UTC",
@@ -38,7 +43,12 @@ function formatNotification(sender: string, message: string, receivedAt: string)
     timeStyle: "medium",
   });
 
-  return `🔐 *OTP Received*\n\n*From:* \`${sender}\`\n*At:* ${date}\n\n*Message:*\n${message}`;
+  // For the sender in backticks, we only need to handle backticks to avoid breaking the block
+  const escapedSender = sender.replace(/`/g, "'");
+  // For the message body, we escape all special markdown characters
+  const escapedMessage = escapeMarkdown(message);
+
+  return `🔐 *OTP Received*\n\n*From:* \`${escapedSender}\`\n*At:* ${date}\n\n*Message:*\n${escapedMessage}`;
 }
 
 export async function POST(request: Request) {
